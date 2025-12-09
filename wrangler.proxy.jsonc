@@ -1,0 +1,5 @@
+{
+  "name": "xcstrings-localizer-proxy",
+  "compatibility_date": "2025-12-09",
+  "main": "worker/index.js"
+}
