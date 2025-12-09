@@ -1,11 +1,11 @@
-# XCStrings Localizer
+# iOS xcstrings & App Store Connect Localizer
 
 A modern web application for translating iOS/macOS `.xcstrings` files and App Store Connect metadata using AI.
 
 ## Quick Start
 
 ### Try it Online
-Visit the live demo: **https://xcstrings-localizer.pages.dev**
+Visit the live demo: **https://localizer.fayhe.com/**
 
 ### Run Locally
 ```bash
