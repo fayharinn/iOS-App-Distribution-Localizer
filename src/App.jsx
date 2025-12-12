@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import WelcomeScreen from './components/WelcomeScreen'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,8 +23,19 @@ const PROVIDER_CONFIG_KEY = 'xcstrings-localizer-provider-config'
 const ASC_CONFIG_KEY = 'asc-localizer-config'
 const PROTECTED_WORDS_KEY = 'xcstrings-localizer-protected-words'
 const ACTIVE_PAGE_KEY = 'xcstrings-localizer-active-page'
+const WELCOME_SHOWN_KEY = 'xcstrings-localizer-welcome-shown'
 
 function App() {
+  // Welcome screen state - show only once per session
+  const [showWelcome, setShowWelcome] = useState(() => {
+    return !sessionStorage.getItem(WELCOME_SHOWN_KEY)
+  })
+
+  const handleWelcomeComplete = () => {
+    sessionStorage.setItem(WELCOME_SHOWN_KEY, 'true')
+    setShowWelcome(false)
+  }
+
   // Page navigation state
   const [activePage, setActivePage] = useState(() => {
     return localStorage.getItem(ACTIVE_PAGE_KEY) || 'xcstrings'
@@ -401,6 +413,11 @@ function App() {
 
   const progressPercent = progress.total ? (progress.current / progress.total) * 100 : 0
 
+  // Show welcome screen
+  if (showWelcome) {
+    return <WelcomeScreen onComplete={handleWelcomeComplete} />
+  }
+
   return (
     <div className="dark min-h-svh bg-background">
       <SidebarProvider>
@@ -480,7 +497,7 @@ function App() {
                         <Languages className="h-6 w-6 text-white" />
                       </div>
                       <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground">XCStrings Localizer</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">Localizer <span className="text-muted-foreground font-normal text-lg">by Fayhe</span></h1>
                         <p className="text-sm text-muted-foreground">AI-powered translation for iOS & macOS</p>
                       </div>
                     </div>

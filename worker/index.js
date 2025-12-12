@@ -5,17 +5,34 @@
 
 const ASC_API_BASE = 'https://api.appstoreconnect.apple.com'
 
+// Allowed origins
+const ALLOWED_ORIGINS = [
+  'https://localizer.fayhe.com',
+  'https://xcstrings-localizer.pages.dev'
+]
+
 export default {
   async fetch(request, env, ctx) {
-    const origin = request.headers.get('Origin') || '*'
+    const origin = request.headers.get('Origin')
     const url = new URL(request.url)
+
+    // Validate origin
+    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+      return new Response(JSON.stringify({
+        error: 'Forbidden',
+        message: 'Origin not allowed'
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    const corsOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
 
     // Show info page for root path
     if (url.pathname === '/' || url.pathname === '') {
       return new Response(JSON.stringify({
-        name: 'XCStrings Localizer Proxy',
-        status: 'running',
-        usage: 'This worker proxies requests to App Store Connect API. Use /v1/... endpoints with a valid JWT token.',
+        status: 'running'
       }, null, 2), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -27,7 +44,7 @@ export default {
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Origin': corsOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           'Access-Control-Max-Age': '86400',
@@ -38,13 +55,12 @@ export default {
     // Check for Authorization header
     if (!request.headers.get('Authorization')) {
       return new Response(JSON.stringify({
-        error: 'Missing Authorization header',
-        hint: 'This proxy requires a valid App Store Connect JWT token'
+        error: 'Missing Authorization header'
       }), {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Origin': corsOrigin,
         }
       })
     }
@@ -69,7 +85,7 @@ export default {
         statusText: response.statusText,
         headers: {
           'Content-Type': response.headers.get('Content-Type') || 'application/json',
-          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Origin': corsOrigin,
         },
       })
     } catch (error) {
@@ -77,7 +93,7 @@ export default {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Origin': corsOrigin,
         }
       })
     }
