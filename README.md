@@ -268,7 +268,7 @@ Contributions are welcome! Here's how to get started:
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Licensed under the GNU AGPLv3: https://www.gnu.org/licenses/agpl-3.0.html
 
 ## Acknowledgments
 
