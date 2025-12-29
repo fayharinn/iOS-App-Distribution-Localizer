@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,16 +31,80 @@ import {
   uploadScreenshot,
   deleteAllScreenshotsInSet,
   normalizeLocaleCode,
+  hasValidToken,
+  getTokenTimeLeft,
   SCREENSHOT_DISPLAY_TYPES,
   ASC_LOCALES,
 } from '@/services/appStoreConnectService'
 import { PROVIDERS } from '@/services/translationService'
+import { decrypt } from '@/utils/crypto'
 
-export default function AppStoreConnect({ credentials, aiConfig }) {
+const ENCRYPTED_KEY_STORAGE = 'asc-encrypted-p8-key'
+
+export default function AppStoreConnect({ credentials, onCredentialsChange, aiConfig }) {
 
   // Connection state
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState(null)
+  const [sessionTimeLeft, setSessionTimeLeft] = useState(0)
+  
+  // Timer for session countdown
+  useEffect(() => {
+    const updateTimer = () => {
+      if (credentials.keyId && credentials.issuerId) {
+        setSessionTimeLeft(getTokenTimeLeft(credentials.keyId, credentials.issuerId))
+      }
+    }
+    
+    updateTimer() // Initial update
+    const interval = setInterval(updateTimer, 1000) // Update every second
+    return () => clearInterval(interval)
+  }, [credentials.keyId, credentials.issuerId])
+  
+  // Format seconds to mm:ss
+  const formatTimeLeft = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+  
+  // Encrypted key unlock state
+  const [hasStoredKey] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return !!window.localStorage.getItem(ENCRYPTED_KEY_STORAGE)
+  })
+  const [unlockPassword, setUnlockPassword] = useState('')
+  const [isUnlocking, setIsUnlocking] = useState(false)
+  const [unlockError, setUnlockError] = useState('')
+
+  // Unlock encrypted key
+  const handleUnlockKey = async () => {
+    if (!unlockPassword) {
+      setUnlockError('Enter password')
+      return
+    }
+    
+    const stored = localStorage.getItem(ENCRYPTED_KEY_STORAGE)
+    if (!stored) {
+      setUnlockError('No stored key found')
+      return
+    }
+    
+    setIsUnlocking(true)
+    setUnlockError('')
+    
+    const result = await decrypt(stored, unlockPassword)
+    
+    if (result.success) {
+      onCredentialsChange(prev => ({ ...prev, privateKey: result.data }))
+      setUnlockPassword('')
+      toast.success('Private key unlocked!')
+    } else {
+      setUnlockError('Wrong password')
+    }
+    
+    setIsUnlocking(false)
+  }
 
   // Apps & Versions
   const [apps, setApps] = useState([])
@@ -48,6 +113,19 @@ export default function AppStoreConnect({ credentials, aiConfig }) {
   const [selectedVersion, setSelectedVersion] = useState(null)
   const [isLoadingApps, setIsLoadingApps] = useState(false)
   const [isLoadingVersions, setIsLoadingVersions] = useState(false)
+
+  // Save selected app/version to sessionStorage
+  useEffect(() => {
+    if (selectedApp) {
+      sessionStorage.setItem('asc-selected-app', JSON.stringify({ id: selectedApp.id, name: selectedApp.name, bundleId: selectedApp.bundleId }))
+    }
+  }, [selectedApp])
+
+  useEffect(() => {
+    if (selectedVersion) {
+      sessionStorage.setItem('asc-selected-version', JSON.stringify({ id: selectedVersion.id, versionString: selectedVersion.versionString }))
+    }
+  }, [selectedVersion])
 
   // Localizations
   const [versionLocalizations, setVersionLocalizations] = useState([])
@@ -61,6 +139,8 @@ export default function AppStoreConnect({ credentials, aiConfig }) {
   // Inline editing for app info (name, subtitle, privacyPolicyUrl)
   const [editedAppInfo, setEditedAppInfo] = useState({}) // { [locId]: { name?, subtitle?, privacyPolicyUrl? } }
   const [isSavingAppInfo, setIsSavingAppInfo] = useState(false)
+  const [isTranslatingAppInfo, setIsTranslatingAppInfo] = useState(null) // locale being translated or 'all'
+  const [appInfoProtectedWords, setAppInfoProtectedWords] = useState('') // comma-separated words to keep untranslated
 
   // Translation state
   const [sourceLocale, setSourceLocale] = useState('en-US')
@@ -120,16 +200,101 @@ export default function AppStoreConnect({ credentials, aiConfig }) {
   const addLog = useCallback((message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString()
     setLogs(prev => [...prev.slice(-100), { message, type, timestamp }])
+    
+    // Show toast for errors and success
+    if (type === 'error') {
+      toast.error(message)
+    } else if (type === 'success') {
+      toast.success(message)
+    }
   }, [])
 
   // Get current AI config values
   const currentAiApiKey = aiConfig.apiKeys[aiConfig.provider] || ''
   const currentAiModel = aiConfig.models[aiConfig.provider] || PROVIDERS[aiConfig.provider]?.defaultModel || ''
 
+  // Auto-connect on mount if we have a valid cached JWT token
+  useEffect(() => {
+    const canAutoConnect = credentials.keyId && credentials.issuerId && hasValidToken(credentials.keyId, credentials.issuerId)
+    
+    if (canAutoConnect && apps.length === 0 && !isConnecting && !isLoadingApps) {
+      console.log('[Auto-connect] Valid JWT found, connecting automatically...')
+      // Small delay to let the UI render first
+      const timer = setTimeout(() => {
+        handleAutoConnect()
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, []) // Run once on mount
+
+  // Auto-connect function (doesn't show error toasts on failure)
+  const handleAutoConnect = async () => {
+    setIsConnecting(true)
+    try {
+      const result = await testConnection(credentials)
+      if (result.success) {
+        setConnectionStatus(result)
+        // Load apps
+        const appsList = await listApps(credentials)
+        setApps(appsList)
+        addLog(`Auto-connected! Loaded ${appsList.length} apps`, 'success')
+        
+        // Restore previously selected app
+        const savedApp = sessionStorage.getItem('asc-selected-app')
+        if (savedApp) {
+          try {
+            const appData = JSON.parse(savedApp)
+            const foundApp = appsList.find(a => a.id === appData.id)
+            if (foundApp) {
+              setSelectedApp(foundApp)
+              
+              // Load versions for this app
+              const versionsList = await listVersions(credentials, foundApp.id)
+              setVersions(versionsList)
+              
+              // Restore previously selected version
+              const savedVersion = sessionStorage.getItem('asc-selected-version')
+              if (savedVersion) {
+                const versionData = JSON.parse(savedVersion)
+                const foundVersion = versionsList.find(v => v.id === versionData.id)
+                if (foundVersion) {
+                  setSelectedVersion(foundVersion)
+                  
+                  // Load localizations
+                  const [versionLocs, appInfoLocs] = await Promise.all([
+                    getVersionLocalizations(credentials, foundVersion.id),
+                    getAppInfoLocalizations(credentials, foundApp.id)
+                  ])
+                  setVersionLocalizations(versionLocs)
+                  setAppInfoLocalizations(appInfoLocs)
+                  addLog(`Restored selection: ${foundApp.name} v${foundVersion.versionString}`, 'success')
+                }
+              }
+            }
+          } catch (e) {
+            console.log('[Auto-connect] Could not restore selection:', e)
+          }
+        }
+      }
+    } catch (error) {
+      console.log('[Auto-connect] Failed:', error.message)
+    }
+    setIsConnecting(false)
+  }
+
   // Test connection
   const handleTestConnection = async () => {
-    if (!credentials.keyId || !credentials.issuerId || !credentials.privateKey) {
-      addLog('Please fill in Key ID, Issuer ID, and upload your .p8 key', 'error')
+    // Allow connection if we have credentials + privateKey OR if we have a valid cached token
+    const hasPrivateKey = credentials.privateKey && credentials.privateKey.trim() !== ''
+    const hasCachedToken = hasValidToken(credentials.keyId, credentials.issuerId)
+    
+    if (!credentials.keyId || !credentials.issuerId) {
+      addLog('Please fill in Key ID and Issuer ID', 'error')
+      return
+    }
+    
+    if (!hasPrivateKey && !hasCachedToken) {
+      addLog('Please upload your .p8 key or wait for a valid session', 'error')
       return
     }
 
@@ -915,25 +1080,162 @@ Respond with ONLY the keywords, nothing else:`
     if (!hasAppInfoChanges) return
 
     setIsSavingAppInfo(true)
-    let successCount = 0
+    let savedFields = 0
+    let failedFields = 0
 
     for (const [locId, fields] of Object.entries(editedAppInfo)) {
-      try {
-        await updateAppInfoLocalization(credentials, locId, fields)
-        successCount++
-      } catch (error) {
-        addLog(`Error saving app info for localization ${locId}: ${error.message}`, 'error')
+      const localeInfo = appInfoLocalizations.localizations.find(l => l.id === locId)
+      const localeName = ASC_LOCALES.find(l => l.code === localeInfo?.locale)?.name || localeInfo?.locale || locId
+
+      // Try each field separately to handle partial failures
+      for (const [field, value] of Object.entries(fields)) {
+        try {
+          await updateAppInfoLocalization(credentials, locId, { [field]: value })
+          savedFields++
+        } catch (error) {
+          failedFields++
+          if (error.message.includes('can not be modified')) {
+            addLog(`${localeName}: "${field}" locked (app not in editable state)`, 'error')
+          } else {
+            addLog(`${localeName}: Failed to save "${field}" - ${error.message}`, 'error')
+          }
+        }
       }
     }
 
-    if (successCount > 0) {
-      addLog(`Saved app info for ${successCount} locale(s)`, 'success')
+    if (savedFields > 0) {
+      addLog(`Saved ${savedFields} field(s)${failedFields > 0 ? `, ${failedFields} failed` : ''}`, savedFields > 0 ? 'success' : 'error')
     }
 
     // Clear edited state and reload
     setEditedAppInfo({})
     await handleVersionSelect(selectedVersion.id)
     setIsSavingAppInfo(false)
+  }
+
+  // Translate App Info (Name & Subtitle) for one or all locales - fills fields locally without saving
+  const handleTranslateAppInfo = async (targetLocaleCode = null) => {
+    if (!currentAiApiKey) {
+      addLog('Please configure your AI provider API key', 'error')
+      return
+    }
+
+    const sourceLoc = appInfoLocalizations.localizations.find(l => l.locale === sourceLocale)
+    if (!sourceLoc) {
+      addLog(`No source App Info found for ${sourceLocale}`, 'error')
+      return
+    }
+
+    if (!sourceLoc.name && !sourceLoc.subtitle) {
+      addLog('Source locale has no name or subtitle to translate', 'error')
+      return
+    }
+
+    // Parse protected words
+    const protectedWords = appInfoProtectedWords
+      .split(',')
+      .map(w => w.trim())
+      .filter(w => w.length > 0)
+
+    const protectedWordsInstruction = protectedWords.length > 0
+      ? `\nCRITICAL: Do NOT translate these words, keep them exactly as-is: ${protectedWords.join(', ')}`
+      : ''
+
+    setIsTranslatingAppInfo(targetLocaleCode || 'all')
+    
+    const localestoTranslate = targetLocaleCode
+      ? appInfoLocalizations.localizations.filter(l => l.locale === targetLocaleCode)
+      : appInfoLocalizations.localizations.filter(l => l.locale !== sourceLocale)
+
+    if (localestoTranslate.length === 0) {
+      setIsTranslatingAppInfo(null)
+      return
+    }
+
+    addLog(`Translating App Info to ${localestoTranslate.length} locale(s) in parallel...`, 'info')
+
+    const config = {
+      provider: aiConfig.provider,
+      apiKey: currentAiApiKey,
+      model: currentAiModel,
+      region: aiConfig.region
+    }
+
+    const { translateText } = await import('@/services/translationService')
+
+    // Build all translation promises in parallel
+    const translationPromises = localestoTranslate
+      .filter(targetLoc => targetLoc.locale !== sourceLocale)
+      .map(async (targetLoc) => {
+        const localeInfo = ASC_LOCALES.find(l => l.code === targetLoc.locale)
+        const localeName = localeInfo?.name || targetLoc.locale
+
+        try {
+          const updates = {}
+
+          // Translate name + subtitle in a single prompt for efficiency
+          if (sourceLoc.name || sourceLoc.subtitle) {
+            const prompt = `Translate to ${localeName}. Max 30 chars each. Keep short & catchy.${protectedWordsInstruction}
+Return ONLY a JSON object like: {"name": "...", "subtitle": "..."}
+
+${sourceLoc.name ? `Name: ${sourceLoc.name}` : ''}
+${sourceLoc.subtitle ? `Subtitle: ${sourceLoc.subtitle}` : ''}`
+
+            const result = await translateText(prompt, sourceLocale, targetLoc.locale, config)
+            
+            // Parse JSON response
+            let parsed
+            try {
+              const jsonMatch = result.match(/\{[\s\S]*\}/)
+              parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+            } catch {
+              parsed = {}
+            }
+
+            if (parsed.name && sourceLoc.name) {
+              updates.name = parsed.name.replace(/^["']|["']$/g, '').trim().substring(0, 30)
+            }
+            if (parsed.subtitle && sourceLoc.subtitle) {
+              updates.subtitle = parsed.subtitle.replace(/^["']|["']$/g, '').trim().substring(0, 30)
+            }
+          }
+
+          return { targetLoc, updates, localeName, error: null }
+        } catch (error) {
+          return { targetLoc, updates: {}, localeName, error: error.message }
+        }
+      })
+
+    // Execute all in parallel
+    const results = await Promise.all(translationPromises)
+
+    let successCount = 0
+    let errorCount = 0
+
+    for (const { targetLoc, updates, localeName, error } of results) {
+      if (error) {
+        addLog(`Error translating App Info for ${localeName}: ${error}`, 'error')
+        errorCount++
+        continue
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setEditedAppInfo(prev => ({
+          ...prev,
+          [targetLoc.id]: {
+            ...(prev[targetLoc.id] || {}),
+            ...updates
+          }
+        }))
+        addLog(`Translated App Info for ${localeName}`, 'success')
+        successCount++
+      }
+    }
+
+    setIsTranslatingAppInfo(null)
+    if (successCount > 0) {
+      addLog(`Done! ${successCount} locale(s) ready for review. Click "Save All Changes" to confirm.`, 'info')
+    }
   }
 
   // Get available locales that aren't already translated
@@ -952,6 +1254,10 @@ Respond with ONLY the keywords, nothing else:`
   ]
 
   const isCredentialsComplete = credentials.keyId && credentials.issuerId && credentials.privateKey
+  
+  // Check if we have a valid cached token (can connect without .p8 key)
+  const hasCachedSession = credentials.keyId && credentials.issuerId && hasValidToken(credentials.keyId, credentials.issuerId)
+  const canConnect = isCredentialsComplete || hasCachedSession
 
   return (
     <div className="space-y-8">
@@ -1033,6 +1339,11 @@ Respond with ONLY the keywords, nothing else:`
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Private key loaded
               </div>
+            ) : hasStoredKey ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-medium">
+                <Clock className="h-3.5 w-3.5" />
+                Key encrypted
+              </div>
             ) : (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 text-xs font-medium">
                 <AlertCircle className="h-3.5 w-3.5" />
@@ -1040,10 +1351,37 @@ Respond with ONLY the keywords, nothing else:`
               </div>
             )}
           </div>
+          
+          {/* Unlock encrypted key inline */}
+          {!credentials.privateKey && hasStoredKey && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
+              <Input
+                type="password"
+                placeholder="Enter password to unlock key..."
+                value={unlockPassword}
+                onChange={(e) => {
+                  setUnlockPassword(e.target.value)
+                  setUnlockError('')
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleUnlockKey()}
+                className="h-9 text-sm flex-1 max-w-[250px]"
+              />
+              <Button
+                size="sm"
+                onClick={handleUnlockKey}
+                disabled={isUnlocking}
+                className="h-9"
+              >
+                {isUnlocking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Unlock'}
+              </Button>
+              {unlockError && <span className="text-xs text-red-500">{unlockError}</span>}
+            </div>
+          )}
+          
           <div className="flex items-center gap-3">
             <Button
               onClick={handleTestConnection}
-              disabled={isConnecting || !isCredentialsComplete}
+              disabled={isConnecting || !canConnect}
               className={apps.length > 0 ? '' : 'gradient-primary border-0'}
             >
               {isConnecting ? (
@@ -1059,8 +1397,14 @@ Respond with ONLY the keywords, nothing else:`
                 <span className="text-sm font-medium">{connectionStatus.message}</span>
               </div>
             )}
+            {sessionTimeLeft > 0 && !credentials.privateKey && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-xs font-medium font-mono">
+                <Clock className="h-3.5 w-3.5" />
+                {formatTimeLeft(sessionTimeLeft)}
+              </div>
+            )}
           </div>
-          {!isCredentialsComplete && (
+          {!canConnect && (
             <p className="text-sm text-muted-foreground px-4 py-3 rounded-lg bg-muted/30 border border-border/50">
               Configure your App Store Connect credentials in the sidebar to get started.
             </p>
@@ -1073,9 +1417,17 @@ Respond with ONLY the keywords, nothing else:`
         <Card id="asc-app-version" className="border-border/50 shadow-sm card-hover scroll-mt-6">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
-                <AppWindow className="h-5 w-5 text-violet-500" />
-              </div>
+              {selectedApp?.iconUrl ? (
+                <img 
+                  src={selectedApp.iconUrl} 
+                  alt={selectedApp.name}
+                  className="h-10 w-10 rounded-xl shadow-sm"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
+                  <AppWindow className="h-5 w-5 text-violet-500" />
+                </div>
+              )}
               <div>
                 <CardTitle className="text-lg">Select App & Version</CardTitle>
                 <CardDescription>Choose which app version to translate</CardDescription>
@@ -1272,47 +1624,87 @@ Respond with ONLY the keywords, nothing else:`
                         <AppWindow className="h-4 w-4 text-muted-foreground" />
                         App Info (Name, Subtitle, Privacy Policy URL)
                       </h4>
-                      {hasAppInfoChanges && (
-                        <Button
-                          size="sm"
-                          onClick={handleSaveAllAppInfo}
-                          disabled={isSavingAppInfo}
-                          className="gradient-primary border-0"
-                        >
-                          {isSavingAppInfo ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Save All Changes ({editedFieldsCount})
-                            </>
-                          )}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {hasAppInfoChanges && (
+                          <Button
+                            size="sm"
+                            onClick={handleSaveAllAppInfo}
+                            disabled={isSavingAppInfo}
+                            className="gradient-primary border-0"
+                          >
+                            {isSavingAppInfo ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                Save All Changes ({editedFieldsCount})
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
+                    
+                    {/* Protected words + Translate All */}
+                    <div className="flex items-center gap-3 mb-3 p-3 rounded-xl bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2 flex-1">
+                        <Label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Protected words:</Label>
+                        <Input
+                          placeholder="Chill, Pro, Plus..."
+                          value={appInfoProtectedWords}
+                          onChange={(e) => setAppInfoProtectedWords(e.target.value)}
+                          className="h-8 text-sm flex-1 max-w-[200px]"
+                        />
+                        <span className="text-xs text-muted-foreground">Won't be translated</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleTranslateAppInfo()}
+                        disabled={isTranslatingAppInfo || !currentAiApiKey}
+                        className="gap-2"
+                      >
+                        {isTranslatingAppInfo === 'all' ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Translating...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            Translate All
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
                     <div className="rounded-xl border border-border/50 overflow-hidden">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/30 hover:bg-muted/30">
                             <TableHead className="w-[140px] font-semibold">Locale</TableHead>
-                            <TableHead className="w-[160px] font-semibold">Name (30)</TableHead>
-                            <TableHead className="w-[180px] font-semibold">Subtitle (30)</TableHead>
-                            <TableHead className="font-semibold">Privacy Policy URL</TableHead>
+                            <TableHead className="w-[180px] font-semibold">Name (30)</TableHead>
+                            <TableHead className="w-[200px] font-semibold">Subtitle (30)</TableHead>
+                            <TableHead className="w-[180px] font-semibold">Privacy URL</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {appInfoLocalizations.localizations.map(loc => {
                             const localeInfo = ASC_LOCALES.find(l => l.code === loc.locale)
                             const hasAnyEdit = editedAppInfo.hasOwnProperty(loc.id)
+                            const isSource = loc.locale === sourceLocale
+                            const isTranslatingThis = isTranslatingAppInfo === loc.locale
                             return (
                               <TableRow key={loc.id} className={hasAnyEdit ? 'bg-amber-500/5' : 'hover:bg-muted/20'}>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <span className="text-lg">{localeInfo?.flag || '🌐'}</span>
                                     <span className="font-medium text-sm">{localeInfo?.name || loc.locale}</span>
+                                    {isSource && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Source</Badge>}
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -1336,11 +1728,29 @@ Respond with ONLY the keywords, nothing else:`
                                 <TableCell>
                                   <Input
                                     type="url"
-                                    placeholder="https://example.com/privacy"
+                                    placeholder="https://..."
                                     value={getAppInfoValue(loc, 'privacyPolicyUrl')}
                                     onChange={(e) => handleAppInfoChange(loc.id, 'privacyPolicyUrl', e.target.value)}
                                     className={`text-sm h-9 ${isFieldEdited(loc.id, 'privacyPolicyUrl') ? 'border-amber-500 bg-amber-500/5' : ''}`}
                                   />
+                                </TableCell>
+                                <TableCell>
+                                  {!isSource && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleTranslateAppInfo(loc.locale)}
+                                      disabled={isTranslatingAppInfo || !currentAiApiKey}
+                                      className="h-8 w-8 p-0"
+                                      title="Translate this locale"
+                                    >
+                                      {isTranslatingThis ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Sparkles className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             )

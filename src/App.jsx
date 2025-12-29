@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Toaster } from 'sonner'
 import WelcomeScreen from './components/WelcomeScreen'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,14 +70,18 @@ function App() {
   })
 
   // ASC Credentials state (shared between sidebar and AppStoreConnect)
+  // Note: privateKey is NOT persisted - only the JWT token is cached in sessionStorage (in appStoreConnectService)
   const [ascCredentials, setAscCredentials] = useState(() => {
     const saved = localStorage.getItem(ASC_CONFIG_KEY)
+    
+    let creds = { keyId: '', issuerId: '', privateKey: '' }
     if (saved) {
       try {
-        return JSON.parse(saved)
+        creds = JSON.parse(saved)
       } catch { /* ignore */ }
     }
-    return { keyId: '', issuerId: '', privateKey: '' }
+    
+    return creds
   })
 
   // Helper to get current provider's API key
@@ -420,6 +425,7 @@ function App() {
 
   return (
     <div className="dark min-h-svh bg-background">
+      <Toaster position="top-right" richColors closeButton />
       <SidebarProvider>
         <AppSidebar
           activePage={activePage}
@@ -480,6 +486,7 @@ function App() {
               {activePage === 'appstore' && (
                 <AppStoreConnect
                   credentials={ascCredentials}
+                  onCredentialsChange={setAscCredentials}
                   aiConfig={providerConfig}
                 />
               )}

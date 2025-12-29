@@ -2,6 +2,21 @@
 
 A modern web application for translating iOS/macOS `.xcstrings` files and App Store Connect metadata using AI.
 
+## Preview
+
+![Welcome Screen](.github/welcome.png)
+
+![ASO Keywords](.github/aso.png)
+
+<details>
+<summary>More screenshots</summary>
+
+| App Store Connect | XCStrings Editor |
+|:-:|:-:|
+| ![App Store Connect](.github/preview-asc.png) | ![XCStrings Editor](.github/preview-xcstrings.png) |
+
+</details>
+
 ## Quick Start
 
 ### Try it Online
@@ -73,7 +88,50 @@ Configure your AI provider in the sidebar:
 4. Download the `.p8` private key file
 5. Enter credentials in the sidebar and upload the `.p8` file
 
-> **Note:** The private key can be saved encrypted and stored in localStorage to prevent clear-text persistence. All cryptographic operations happen locally in the browser; no key material is ever transmitted. Security relies on the browser environment and the strength of your password.
+#### Authentication Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         App Store Connect Auth Flow                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────┐    password     ┌──────────────┐                              │
+│  │  .p8 Key │ ──────────────► │  Encrypted   │ ◄─── Stored in localStorage  │
+│  │  (file)  │    encrypt      │   .p8 Key    │      (persistent)            │
+│  └────┬─────┘                 └──────┬───────┘                              │
+│       │                              │                                      │
+│       │ sign                         │ password                             │
+│       │                              │ decrypt                              │
+│       ▼                              ▼                                      │
+│  ┌──────────┐                 ┌──────────────┐                              │
+│  │   JWT    │ ◄───────────────│  Decrypted   │                              │
+│  │  Token   │     sign        │   .p8 Key    │ ◄─── In memory only          │
+│  └────┬─────┘                 └──────────────┘      (cleared on reload)     │
+│       │                                                                     │
+│       │ cache                                                               │
+│       ▼                                                                     │
+│  ┌──────────────┐                                                           │
+│  │ sessionStorage│ ◄─── JWT cached for ~19 min                              │
+│  │  (JWT only)   │      Auto-reconnect on page reload                       │
+│  └──────┬───────┘       Timer shows remaining time                          │
+│         │                                                                   │
+│         │ Bearer token                                                      │
+│         ▼                                                                   │
+│  ┌──────────────┐                                                           │
+│  │  App Store   │                                                           │
+│  │ Connect API  │                                                           │
+│  └──────────────┘                                                           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Security notes:**
+- The `.p8` private key is **never** stored in plain text
+- Optional encryption with your password stores the key in localStorage
+- Only the JWT token (valid ~19 min) is cached in sessionStorage
+- On page reload: if JWT is still valid, auto-reconnects without needing the `.p8` key
+- All cryptographic operations happen locally in the browser
+- No key material is ever transmitted to any server
 
 ## Development
 

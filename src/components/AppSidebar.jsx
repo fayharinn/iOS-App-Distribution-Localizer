@@ -90,7 +90,17 @@ export function AppSidebar({
     if (!file.name.endsWith('.p8')) return
     try {
       const content = await file.text()
-      onAscCredentialsChange(prev => ({ ...prev, privateKey: content }))
+      
+      // Extract Key ID from filename (format: AuthKey_XXXXXXXXXX.p8)
+      const keyIdMatch = file.name.match(/AuthKey_([A-Z0-9]+)\.p8$/i)
+      const extractedKeyId = keyIdMatch ? keyIdMatch[1] : null
+      
+      onAscCredentialsChange(prev => ({
+        ...prev,
+        privateKey: content,
+        // Auto-fill Key ID if extracted and field is empty
+        ...(extractedKeyId && !prev.keyId ? { keyId: extractedKeyId } : {})
+      }))
     } catch { /* ignore */ }
   }
 

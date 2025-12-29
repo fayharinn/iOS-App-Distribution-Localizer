@@ -119,7 +119,7 @@ function FlyingText({ text, initialPosition, speed, delay, color }) {
 }
 
 // Speed lines / trails
-function SpeedLines({ count = 200 }) {
+function SpeedLines({ count = 100 }) {
   const ref = useRef()
 
   const [positions, sizes, speeds, colors] = useMemo(() => {
@@ -145,8 +145,8 @@ function SpeedLines({ count = 200 }) {
       positions[i * 3 + 1] = height
       positions[i * 3 + 2] = -30 - Math.random() * 40
 
-      sizes[i] = Math.random() * 3 + 1
-      speeds[i] = Math.random() * 0.5 + 0.3
+      sizes[i] = Math.random() * 2 + 0.5
+      speeds[i] = Math.random() * 0.15 + 0.08
 
       const color = colorOptions[Math.floor(Math.random() * colorOptions.length)]
       colors[i * 3] = color.r
@@ -164,8 +164,8 @@ function SpeedLines({ count = 200 }) {
     const speedAttr = ref.current.geometry.attributes.speed
 
     for (let i = 0; i < count; i++) {
-      // Move toward camera (z increases)
-      positionAttr.array[i * 3 + 2] += speedAttr.array[i] * 0.5
+      // Move toward camera (z increases) - slower
+      positionAttr.array[i * 3 + 2] += speedAttr.array[i] * 0.15
 
       // Reset when past camera
       if (positionAttr.array[i * 3 + 2] > 10) {
@@ -265,7 +265,7 @@ function FlyingLanguages() {
 export default function LanguageParticles() {
   return (
     <group>
-      <SpeedLines count={300} />
+      <SpeedLines count={150} />
       <FlyingLanguages />
     </group>
   )
