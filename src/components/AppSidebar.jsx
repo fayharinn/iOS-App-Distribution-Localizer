@@ -266,6 +266,24 @@ export function AppSidebar({
                   )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={activePage === 'screenshots'}
+                  onClick={() => onPageChange('screenshots')}
+                  tooltip="Screenshot Maker"
+                  className={`rounded-xl h-11 px-3 transition-all duration-200 ${
+                    activePage === 'screenshots'
+                      ? 'bg-primary/10 text-primary font-medium shadow-sm'
+                      : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <Image className={`h-5 w-5 ${activePage === 'screenshots' ? 'text-primary' : ''}`} />
+                  <span>Screenshots</span>
+                  {activePage === 'screenshots' && (
+                    <div className="ml-auto h-2 w-2 rounded-full bg-primary animate-pulse" />
+                  )}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
 
             {/* App Store Connect Quick Nav - only show when on appstore page */}

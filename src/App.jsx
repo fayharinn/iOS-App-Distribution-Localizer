@@ -18,7 +18,8 @@ import { translateStrings, testApiConnection, SUPPORTED_LANGUAGES, PROVIDERS, DE
 import { parseXCStrings, generateXCStrings, getTranslationStats } from './utils/xcstringsParser'
 import AppStoreConnect from './components/AppStoreConnect'
 import { AppSidebar } from './components/AppSidebar'
-import { Languages, Store, Upload, Sparkles, FileText, Download, Search, Edit3, Shield, Zap, Terminal, CheckCircle2, AlertCircle, Clock, X, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import ScreenshotMaker from './components/ScreenshotMaker'
+import { Languages, Store, Upload, Sparkles, FileText, Download, Search, Edit3, Shield, Zap, Terminal, CheckCircle2, AlertCircle, Clock, X, Plus, ChevronLeft, ChevronRight, Image } from 'lucide-react'
 
 const PROVIDER_CONFIG_KEY = 'xcstrings-localizer-provider-config'
 const ASC_CONFIG_KEY = 'asc-localizer-config'
@@ -98,6 +99,9 @@ function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0, currentText: '' })
   const [stats, setStats] = useState(null)
   const [logs, setLogs] = useState([])
+  const [screenshotHeadlineKey, setScreenshotHeadlineKey] = useState('')
+  const [screenshotSubheadlineKey, setScreenshotSubheadlineKey] = useState('')
+  const [screenshotApplyAll, setScreenshotApplyAll] = useState(true)
 
   // Editor state
   const [editDialog, setEditDialog] = useState({ open: false, key: '', lang: '', value: '' })
@@ -416,6 +420,61 @@ function App() {
     return text.substring(0, maxLength) + '...'
   }
 
+  const getLocalizedStringValue = useCallback((key, lang) => {
+    if (!xcstringsData?.strings?.[key]) return ''
+    const localization = xcstringsData.strings[key]?.localizations?.[lang]
+    if (!localization) return ''
+    return localization.stringUnit?.value
+      || localization.variations?.plural?.other?.stringUnit?.value
+      || localization.variations?.device?.other?.stringUnit?.value
+      || ''
+  }, [xcstringsData])
+
+  const screenshotLanguages = useMemo(() => {
+    if (!xcstringsData) return []
+    const fromStats = stats?.languages?.length ? stats.languages : []
+    const baseLang = xcstringsData?.sourceLanguage || 'en'
+    const languages = fromStats.length ? fromStats : [baseLang]
+    return Array.from(new Set(languages))
+  }, [stats, xcstringsData])
+
+  const screenshotKeyOptions = useMemo(() => {
+    return xcstringsData?.strings ? Object.keys(xcstringsData.strings).sort() : []
+  }, [xcstringsData])
+
+  const screenshotLocalizationPayload = useMemo(() => {
+    if (!screenshotLanguages.length) return null
+    const headlinesByLang = {}
+    const subheadlinesByLang = {}
+
+    if (screenshotHeadlineKey) {
+      screenshotLanguages.forEach((lang) => {
+        const value = getLocalizedStringValue(screenshotHeadlineKey, lang)
+        if (value !== '') headlinesByLang[lang] = value
+      })
+    }
+
+    if (screenshotSubheadlineKey) {
+      screenshotLanguages.forEach((lang) => {
+        const value = getLocalizedStringValue(screenshotSubheadlineKey, lang)
+        if (value !== '') subheadlinesByLang[lang] = value
+      })
+    }
+
+    return {
+      languages: screenshotLanguages,
+      headlinesByLang,
+      subheadlinesByLang,
+      applyToAll: screenshotApplyAll
+    }
+  }, [
+    screenshotApplyAll,
+    screenshotHeadlineKey,
+    screenshotSubheadlineKey,
+    screenshotLanguages,
+    getLocalizedStringValue
+  ])
+
   const progressPercent = progress.total ? (progress.current / progress.total) * 100 : 0
 
   // Show welcome screen
@@ -466,6 +525,19 @@ function App() {
                 <Store className="h-4 w-4" />
                 <span className="hidden sm:inline">App Store Connect</span>
               </button>
+              <button
+                onClick={() => setActivePage('screenshots')}
+                className={`
+                  flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
+                  ${activePage === 'screenshots'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                  }
+                `}
+              >
+                <Image className="h-4 w-4" />
+                <span className="hidden sm:inline">Screenshots</span>
+              </button>
             </div>
 
             <div className="ml-auto flex items-center gap-3">
@@ -481,7 +553,7 @@ function App() {
           </header>
 
           <main className="flex-1 p-6 md:p-8 lg:p-10">
-            <div className="mx-auto max-w-6xl space-y-8">
+            <div className={`mx-auto space-y-8 ${activePage === 'screenshots' ? 'w-full max-w-none' : 'max-w-6xl'}`}>
               {/* App Store Connect Page */}
               {activePage === 'appstore' && (
                 <AppStoreConnect
@@ -490,6 +562,15 @@ function App() {
                   aiConfig={providerConfig}
                 />
               )}
+
+              {/* Screenshots Page */}
+              <div className={activePage === 'screenshots' ? 'space-y-6' : 'hidden'}>
+                <ScreenshotMaker
+                  localizationPayload={screenshotLocalizationPayload}
+                  aiConfig={providerConfig}
+                  active={activePage === 'screenshots'}
+                />
+              </div>
 
               {/* XCStrings Page */}
               {activePage === 'xcstrings' && (

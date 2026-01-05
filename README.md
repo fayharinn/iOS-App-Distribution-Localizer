@@ -1,6 +1,11 @@
 # iOS xcstrings & App Store Connect Localizer
 
-A modern web application for translating iOS/macOS `.xcstrings` files and App Store Connect metadata using AI.
+[![GitHub Stars](https://img.shields.io/github/stars/fayharinn/iOS-App-Distribution-Localizer.svg?style=flat)](https://github.com/fayharinn/iOS-App-Distribution-Localizer/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/fayharinn/iOS-App-Distribution-Localizer.svg?style=flat)](https://github.com/fayharinn/iOS-App-Distribution-Localizer/issues)
+[![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-yellow.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
+[![Last Commit](https://img.shields.io/github/last-commit/fayharinn/iOS-App-Distribution-Localizer.svg?style=flat)](https://github.com/fayharinn/iOS-App-Distribution-Localizer/commits/main)
+
+A modern web application for translating iOS/macOS `.xcstrings` files, App Store Connect metadata, and building polished App Store screenshots with AI-assisted workflows.
 
 ## Preview
 
@@ -30,7 +35,6 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 - that's it! The dev server includes a proxy for App Store Connect API (no CORS issues).
 
 ## Features
 
@@ -49,11 +53,19 @@ Open http://localhost:5173 - that's it! The dev server includes a proxy for App 
 - Create new app versions
 - Edit localizations directly
 
+### Screenshot Maker
+- Build App Store-ready screenshots with 2D + 3D device mockups
+- Per-screenshot layouts: background, shadows, frames, and positioning
+- Multi-language headlines/subheadlines with AI translation
+- Inline formatting for emphasis (`*bold*`) and line breaks (`<br>`)
+- Batch export as ZIP per language
+
 ## Tech Stack
 
 - **React 18** + **Vite**
 - **Tailwind CSS** + **shadcn/ui**
 - **jose** for JWT signing (App Store Connect API auth)
+- **Three.js** + Canvas for screenshot rendering
 
 ## Installation
 
@@ -133,21 +145,7 @@ Configure your AI provider in the sidebar:
 - All cryptographic operations happen locally in the browser
 - No key material is ever transmitted to any server
 
-## Development
 
-```bash
-# Start dev server with hot reload
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-
-# Lint code
-npm run lint
-```
 
 ### Project Structure
 
@@ -173,36 +171,10 @@ src/
 
 ### CORS Issue
 
-The App Store Connect API doesn't support CORS. In development, we use Vite's proxy. For production, you have several options:
+The App Store Connect API doesn't support CORS. In localhost you'll not have issue, but if you want to upload it online, here is the recommended option:
 
-#### Option 1: Vercel Serverless Function
 
-Create `api/asc/[...path].js`:
-
-```javascript
-export const config = { runtime: 'edge' }
-
-export default async function handler(request) {
-  const url = new URL(request.url)
-  const path = url.pathname.replace('/api/asc', '')
-
-  const response = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
-    method: request.method,
-    headers: {
-      'Authorization': request.headers.get('Authorization'),
-      'Content-Type': 'application/json',
-    },
-    body: request.method !== 'GET' ? await request.text() : undefined,
-  })
-
-  return new Response(response.body, {
-    status: response.status,
-    headers: { 'Content-Type': 'application/json' }
-  })
-}
-```
-
-#### Option 2: Cloudflare (Recommended)
+#### Option 1: Cloudflare (Recommended)
 
 Deploy both the site and API proxy to Cloudflare:
 
@@ -225,57 +197,21 @@ wrangler pages deploy dist --project-name=xcstrings-localizer
 
 Your site will be live at `https://xcstrings-localizer.pages.dev`
 
-#### Option 3: Desktop App
-
-Convert to a desktop app using Tauri or Electron (no CORS restrictions).
-
-#### Option 4: Run Locally
-
-Use `npm run dev` locally - the Vite proxy handles CORS.
 
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
+Contributions are welcome!
 
-### Getting Started
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Run linting: `npm run lint`
-5. Build to check for errors: `npm run build`
-6. Commit your changes: `git commit -m "Add my feature"`
-7. Push to your fork: `git push origin feature/my-feature`
-8. Open a Pull Request
-
-### Guidelines
-
-- Follow the existing code style
-- Use meaningful commit messages
-- Add comments for complex logic
-- Test your changes thoroughly
-- Update documentation if needed
-
-### Ideas for Contribution
-
-- [ ] Add more AI providers (Mistral, Cohere, etc.)
-- [ ] Support for other localization file formats (`.strings`, `.xliff`)
-- [ ] Batch translation progress persistence
-- [ ] Translation memory / glossary support
-- [ ] Dark/light theme toggle
-- [ ] Export translation reports
-- [ ] Keyboard shortcuts
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Licensed under the GNU AGPLv3: https://www.gnu.org/licenses/agpl-3.0.html
+
 
 ## Acknowledgments
 
-- [shadcn/ui](https://ui.shadcn.com/) for the beautiful UI components
-- [Lucide](https://lucide.dev/) for icons
-- [jose](https://github.com/panva/jose) for JWT handling
+Screenshot generator forked from https://github.com/YUZU-Hub/appscreen by Stefan from yuzuhub.com
 
 ---
 
-Made with care by Fayhe
+[![Follow on X](https://img.shields.io/badge/Follow-@fayhecode-black?style=for-the-badge&logo=x)](https://x.com/fayhecode)
