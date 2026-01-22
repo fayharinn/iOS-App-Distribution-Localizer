@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌍</text></svg>" />
@@ -24,11 +24,22 @@
     <meta property="twitter:description" content="Free, open-source tool to translate your .xcstrings localization files and App Store metadata using AI." />
     <meta property="twitter:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=630&fit=crop" />
 
-    <!-- Theme Color -->
-    <meta name="theme-color" content="#7c3aed" />
+    <!-- Theme Color - Dynamic based on theme -->
+    <meta name="theme-color" content="#7c3aed" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#8b5cf6" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <script type="module" crossorigin src="/assets/index-LZlbYjLm.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Dod5jzgZ.css">
+    
+    <!-- Prevent flash of wrong theme -->
+    <script>
+      (function() {
+        const theme = localStorage.getItem('localizer-theme') || 'system';
+        const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.classList.toggle('light', !isDark);
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-eVwfgFfD.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-n_VNukGt.css">
   </head>
   <body>
     <div id="root"></div>
