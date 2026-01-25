@@ -528,13 +528,51 @@ RULES:
 
       const result = await response.json()
       console.log('[ASC Translation] OpenAI response:', result.error ? result.error : 'OK')
-      if (result.error) throw new Error(result.error.message)
+      if (result.error) throw new Error(result.error.message || JSON.stringify(result.error))
+      if (!result.choices?.[0]?.message?.content) {
+        throw new Error(`Invalid OpenAI API response: ${JSON.stringify(result).slice(0, 200)}`)
+      }
+      content = result.choices[0].message.content.trim()
+    } else if (provider === 'azure') {
+      console.log('[ASC Translation] Calling Azure OpenAI API...')
+      const { endpoint } = aiConfig
+      if (!endpoint) {
+        throw new Error('Azure endpoint is required')
+      }
+      let baseUrl = endpoint.replace(/\/+$/, '')
+      const openaiIndex = baseUrl.indexOf('/openai/')
+      if (openaiIndex !== -1) {
+        baseUrl = baseUrl.substring(0, openaiIndex)
+      }
+      const url = `${baseUrl}/openai/deployments/${encodeURIComponent(model)}/chat/completions?api-version=2025-01-01-preview`
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userMessage }
+          ],
+        })
+      })
+
+      const result = await response.json()
+      console.log('[ASC Translation] Azure response:', result.error ? result.error : 'OK')
+      if (result.error) throw new Error(result.error.message || JSON.stringify(result.error))
+      if (!result.choices?.[0]?.message?.content) {
+        throw new Error(`Invalid Azure API response: ${JSON.stringify(result).slice(0, 200)}`)
+      }
       content = result.choices[0].message.content.trim()
     } else if (provider === 'bedrock') {
       console.log('[ASC Translation] Calling Bedrock API...')
-      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(model)}/converse`
+      const bedrockEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(model)}/converse`
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(bedrockEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -550,6 +588,9 @@ RULES:
       const result = await response.json()
       console.log('[ASC Translation] Bedrock response:', result.message ? result.message : 'OK')
       if (result.message) throw new Error(result.message)
+      if (!result.output?.message?.content?.[0]?.text) {
+        throw new Error(`Invalid Bedrock API response: ${JSON.stringify(result).slice(0, 200)}`)
+      }
       content = result.output.message.content[0].text.trim()
     } else {
       throw new Error(`Unknown provider: ${provider}`)

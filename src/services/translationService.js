@@ -526,6 +526,9 @@ export async function translateText(prompt, sourceLocale, targetLocale, config) 
         })
         const openaiResult = await openaiResponse.json()
         if (openaiResult.error) throw new Error(openaiResult.error.message)
+        if (!openaiResult.choices?.[0]?.message?.content) {
+          throw new Error(`Invalid API response: ${JSON.stringify(openaiResult).slice(0, 200)}`)
+        }
         content = openaiResult.choices[0].message.content
         break
       }

@@ -494,10 +494,15 @@ Respond with ONLY the keywords, nothing else:`
         provider: aiConfig.provider,
         apiKey: currentAiApiKey,
         model: currentAiModel,
-        region: aiConfig.region
+        region: aiConfig.region,
+        endpoint: aiConfig.endpoint
       }
 
       const generatedKeywords = await translateText(asoPrompt, 'en-US', locale, config)
+
+      if (!generatedKeywords) {
+        throw new Error('No keywords generated from AI')
+      }
 
       // Clean and validate keywords
       let cleanedKeywords = generatedKeywords
@@ -870,7 +875,8 @@ Respond with ONLY the keywords, nothing else:`
       provider: aiConfig.provider,
       apiKey: currentAiApiKey,
       model: currentAiModel,
-      region: aiConfig.region
+      region: aiConfig.region,
+      endpoint: aiConfig.endpoint
     }
 
     for (const targetLocale of targetLocales) {
@@ -1158,7 +1164,8 @@ Respond with ONLY the keywords, nothing else:`
       provider: aiConfig.provider,
       apiKey: currentAiApiKey,
       model: currentAiModel,
-      region: aiConfig.region
+      region: aiConfig.region,
+      endpoint: aiConfig.endpoint
     }
 
     const { translateText } = await import('@/services/translationService')
