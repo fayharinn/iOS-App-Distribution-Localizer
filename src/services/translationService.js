@@ -27,6 +27,14 @@ export const PROVIDERS = {
     models: ['gpt-5-mini', 'gpt-5-nano-2025-08-07'],
     defaultModel: 'gpt-5-mini',
   },
+  azure: {
+    name: 'Azure OpenAI',
+    models: ['gpt-5-nano', 'gpt-5-mini'],
+    defaultModel: 'gpt-5-nano',
+    needsEndpoint: true,
+    customModelInput: true,
+    placeholder: 'https://xxx.openai.azure.com',
+  },
   bedrock: {
     name: 'AWS Bedrock',
     models: [
@@ -185,6 +193,9 @@ async function callOpenAI(apiKey, model, systemMessage, userMessage) {
 
   const result = await response.json()
   if (result.error) throw new Error(result.error.message)
+  if (!result.choices?.[0]?.message?.content) {
+    throw new Error(`Invalid API response: ${JSON.stringify(result).slice(0, 200)}`)
+  }
   return result.choices[0].message.content
 }
 
@@ -213,29 +224,54 @@ async function callAnthropic(apiKey, model, systemMessage, userMessage) {
   return result.content[0].text
 }
 
-// Google Gemini API
-async function callGemini(apiKey, model, systemMessage, userMessage) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+// Azure OpenAI API
+async function callAzure(apiKey, model, endpoint, systemMessage, userMessage, jsonMode = true) {
+  // Extract base URL (just the host part, strip any path)
+  let baseUrl = endpoint.replace(/\/+$/, '')
+  // If user pasted a full URL with /openai/deployments/..., extract just the base
+  const openaiIndex = baseUrl.indexOf('/openai/')
+  if (openaiIndex !== -1) {
+    baseUrl = baseUrl.substring(0, openaiIndex)
+  }
+  const url = `${baseUrl}/openai/deployments/${encodeURIComponent(model)}/chat/completions?api-version=2025-01-01-preview`
+
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: systemMessage },
+      { role: 'user', content: userMessage }
+    ]
+  }
+
+  if (jsonMode) {
+    body.response_format = { type: 'json_object' }
+  }
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `${systemMessage}\n\n${userMessage}` }]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-      }
-    })
+    body: JSON.stringify(body)
   })
 
   const result = await response.json()
-  if (result.error) throw new Error(result.error.message)
-  return result.candidates[0].content.parts[0].text
+  
+  if (result.error) {
+    throw new Error(result.error.message || JSON.stringify(result.error))
+  }
+  
+  if (!result.choices || !Array.isArray(result.choices) || result.choices.length === 0) {
+    console.error('Unexpected Azure API response:', JSON.stringify(result, null, 2))
+    throw new Error(`Invalid API response: missing choices array. Response: ${JSON.stringify(result).slice(0, 200)}`)
+  }
+  
+  if (!result.choices[0].message?.content) {
+    throw new Error(`Empty response from Azure API: no message content`)
+  }
+  
+  return result.choices[0].message.content
 }
 
 // AWS Bedrock API
@@ -269,7 +305,7 @@ async function callBedrock(apiKey, model, region, systemMessage, userMessage) {
 }
 
 async function translateSingleText(text, targetLangs, config, protectedWords = []) {
-  const { provider, apiKey, model, region } = config
+  const { provider, apiKey, model, region, endpoint } = config
   const { systemMessage, userMessage } = buildPrompt(text, targetLangs, protectedWords)
 
   try {
@@ -277,6 +313,9 @@ async function translateSingleText(text, targetLangs, config, protectedWords = [
     switch (provider) {
       case 'openai':
         content = await callOpenAI(apiKey, model, systemMessage, userMessage)
+        break
+      case 'azure':
+        content = await callAzure(apiKey, model, endpoint, systemMessage, userMessage)
         break
       case 'bedrock':
         content = await callBedrock(apiKey, model, region, systemMessage, userMessage)
@@ -307,7 +346,7 @@ async function translateSingleText(text, targetLangs, config, protectedWords = [
 
 // Translate multiple texts in a single API call
 async function translateBatch(texts, targetLangs, config, protectedWords = []) {
-  const { provider, apiKey, model, region } = config
+  const { provider, apiKey, model, region, endpoint } = config
   const { systemMessage, userMessage } = buildBatchPrompt(texts, targetLangs, protectedWords)
 
   try {
@@ -315,6 +354,9 @@ async function translateBatch(texts, targetLangs, config, protectedWords = []) {
     switch (provider) {
       case 'openai':
         content = await callOpenAI(apiKey, model, systemMessage, userMessage)
+        break
+      case 'azure':
+        content = await callAzure(apiKey, model, endpoint, systemMessage, userMessage)
         break
       case 'bedrock':
         content = await callBedrock(apiKey, model, region, systemMessage, userMessage)
@@ -365,7 +407,7 @@ async function translateBatch(texts, targetLangs, config, protectedWords = []) {
 
 // Test API connection
 export async function testApiConnection(config) {
-  const { provider, apiKey, model, region } = config
+  const { provider, apiKey, model, region, endpoint } = config
   const testMessage = "Say 'API connection successful' in exactly those words."
 
   try {
@@ -403,16 +445,26 @@ export async function testApiConnection(config) {
         })
         break
 
-      case 'gemini':
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      case 'azure': {
+        let baseUrl = endpoint.replace(/\/+$/, '')
+        const openaiIndex = baseUrl.indexOf('/openai/')
+        if (openaiIndex !== -1) {
+          baseUrl = baseUrl.substring(0, openaiIndex)
+        }
+        const url = `${baseUrl}/openai/deployments/${encodeURIComponent(model)}/chat/completions?api-version=2025-01-01-preview`
+        response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: testMessage }] }],
-            generationConfig: { maxOutputTokens: 20 }
+            model,
+            messages: [{ role: 'user', content: testMessage }]
           })
         })
         break
+      }
 
       case 'bedrock':
         response = await fetch(`https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(model)}/converse`, {
@@ -450,15 +502,14 @@ export async function testApiConnection(config) {
 
 // Simple text completion for ASO keyword generation and similar tasks
 export async function translateText(prompt, sourceLocale, targetLocale, config) {
-  const { provider, apiKey, model, region } = config
+  const { provider, apiKey, model, region, endpoint } = config
 
   const systemMessage = "You are a helpful assistant. Follow the user's instructions precisely and respond with only the requested output."
 
   try {
     let content
     switch (provider) {
-      case 'openai':
-        // Direct OpenAI call without JSON response format
+      case 'openai': {
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -476,6 +527,10 @@ export async function translateText(prompt, sourceLocale, targetLocale, config) 
         const openaiResult = await openaiResponse.json()
         if (openaiResult.error) throw new Error(openaiResult.error.message)
         content = openaiResult.choices[0].message.content
+        break
+      }
+      case 'azure':
+        content = await callAzure(apiKey, model, endpoint, systemMessage, prompt, false)
         break
       case 'bedrock':
         content = await callBedrock(apiKey, model, region, systemMessage, prompt)

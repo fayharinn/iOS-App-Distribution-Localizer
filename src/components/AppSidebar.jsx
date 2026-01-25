@@ -396,17 +396,47 @@ export function AppSidebar({
 
                 {/* Model */}
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Model</Label>
-                  <select
-                    value={currentModel}
-                    onChange={(e) => handleModelChange(e.target.value)}
-                    className="w-full h-9 rounded-lg bg-muted/30 border border-border/50 px-3 text-sm focus:border-primary/50 focus:outline-none transition-colors"
-                  >
-                    {PROVIDERS[providerConfig.provider]?.models.map(model => (
-                      <option key={model} value={model}>{getModelDisplayName(model)}</option>
-                    ))}
-                  </select>
+                  <Label className="text-xs font-medium text-muted-foreground">Model / Deployment Name</Label>
+                  {PROVIDERS[providerConfig.provider]?.customModelInput ? (
+                    <>
+                      <Input
+                        placeholder={PROVIDERS[providerConfig.provider]?.defaultModel || 'model-name'}
+                        value={currentModel}
+                        onChange={(e) => handleModelChange(e.target.value)}
+                        className="h-9 text-sm bg-muted/30 border-border/50 focus:border-primary/50"
+                        list={`model-suggestions-${providerConfig.provider}`}
+                      />
+                      <datalist id={`model-suggestions-${providerConfig.provider}`}>
+                        {PROVIDERS[providerConfig.provider]?.models.map(model => (
+                          <option key={model} value={model} />
+                        ))}
+                      </datalist>
+                    </>
+                  ) : (
+                    <select
+                      value={currentModel}
+                      onChange={(e) => handleModelChange(e.target.value)}
+                      className="w-full h-9 rounded-lg bg-muted/30 border border-border/50 px-3 text-sm focus:border-primary/50 focus:outline-none transition-colors"
+                    >
+                      {PROVIDERS[providerConfig.provider]?.models.map(model => (
+                        <option key={model} value={model}>{getModelDisplayName(model)}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
+
+                {/* Endpoint URL for Azure */}
+                {PROVIDERS[providerConfig.provider]?.needsEndpoint && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-muted-foreground">Endpoint URL</Label>
+                    <Input
+                      placeholder={PROVIDERS[providerConfig.provider]?.placeholder || 'https://your-resource.openai.azure.com'}
+                      value={providerConfig.endpoint || ''}
+                      onChange={(e) => onProviderConfigChange(prev => ({ ...prev, endpoint: e.target.value }))}
+                      className="h-9 text-sm bg-muted/30 border-border/50 focus:border-primary/50"
+                    />
+                  </div>
+                )}
 
                 {/* Region for Bedrock */}
                 {PROVIDERS[providerConfig.provider]?.needsRegion && (

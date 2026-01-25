@@ -64,11 +64,12 @@ function App() {
           provider,
           apiKeys: parsed.apiKeys || {},
           models: parsed.models || {},
-          region: parsed.region || 'us-east-1'
+          region: parsed.region || 'us-east-1',
+          endpoint: parsed.endpoint || ''
         }
       } catch { /* ignore */ }
     }
-    return { provider: 'openai', apiKeys: {}, models: {}, region: 'us-east-1' }
+    return { provider: 'openai', apiKeys: {}, models: {}, region: 'us-east-1', endpoint: '' }
   })
 
   // ASC Credentials state (shared between sidebar and AppStoreConnect)
@@ -144,7 +145,8 @@ function App() {
       provider: providerConfig.provider,
       apiKey: currentApiKey,
       model: currentModel,
-      region: providerConfig.region
+      region: providerConfig.region,
+      endpoint: providerConfig.endpoint || PROVIDERS[providerConfig.provider]?.placeholder || ''
     }
 
     const result = await testApiConnection(config)
@@ -268,7 +270,8 @@ function App() {
       provider: providerConfig.provider,
       apiKey: currentApiKey,
       model: currentModel,
-      region: providerConfig.region
+      region: providerConfig.region,
+      endpoint: providerConfig.endpoint || PROVIDERS[providerConfig.provider]?.placeholder || ''
     }
 
     try {
