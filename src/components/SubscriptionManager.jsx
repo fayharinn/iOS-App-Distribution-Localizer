@@ -345,13 +345,22 @@ export default function SubscriptionManager({ aiConfig, ascCredentials, onCreden
           currentPriceUSD = exchangeRate > 0 ? currentPriceLocal / exchangeRate : currentPriceLocal
         }
         
+        // Check for scheduled future price
+        const futurePrice = prices.find(p => 
+          p.territory === rec.countryCode && 
+          p.startDate && 
+          new Date(p.startDate) > new Date()
+        )
+        
         return {
           ...rec,
           territory: rec.countryCode,
           currentPriceUSD, // Price converted to USD for comparison
           currentPriceLocal, // Original price in local currency
           currentCurrency: rec.currency,
-          hasPriceSet: !!currentPrice
+          hasPriceSet: !!currentPrice,
+          scheduledPrice: futurePrice ? parseFloat(futurePrice.customerPrice) : null,
+          scheduledDate: futurePrice?.startDate || null
         }
       })
 
@@ -1166,6 +1175,12 @@ export default function SubscriptionManager({ aiConfig, ascCredentials, onCreden
                                     <>
                                       <p className="font-semibold">${p.currentPriceUSD?.toFixed(2)}</p>
                                       <p className="text-xs text-muted-foreground">{p.symbol}{p.currentPriceLocal.toFixed(2)}</p>
+                                      {p.scheduledDate && (
+                                        <p className="text-xs text-purple-500 flex items-center gap-1">
+                                          <Clock className="h-3 w-3" />
+                                          {p.symbol}{p.scheduledPrice} on {p.scheduledDate}
+                                        </p>
+                                      )}
                                     </>
                                   ) : (
                                     <p className="text-muted-foreground text-sm">Not set</p>

@@ -185,6 +185,10 @@ GNU AGPLv3 — Free to use, modify, and distribute with attribution.
 
 Screenshot generator based on [appscreen](https://github.com/YUZU-Hub/appscreen) by Stefan from yuzuhub.com
 
+## 👥 Contributors
+
+- [isnine](https://github.com/isnine) — Azure OpenAI support
+
 ---
 
 [![Follow on X](https://img.shields.io/badge/Follow-@fayhecode-black?style=for-the-badge&logo=x)](https://x.com/fayhecode)
