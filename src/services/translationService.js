@@ -47,8 +47,8 @@ export const PROVIDERS = {
   },
   github: {
     name: 'GitHub Models',
-    models: ['gpt-4o', 'gpt-4o-mini', 'o1-mini', 'o1-preview', 'Phi-3.5-mini-instruct'],
-    defaultModel: 'gpt-4o-mini',
+    models: ['gpt-4o', 'gpt-4.1'],
+    defaultModel: 'gpt-4o',
   },
 }
 
