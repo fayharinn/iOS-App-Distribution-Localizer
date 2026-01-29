@@ -2789,6 +2789,7 @@ function applyAiConfig(payload = {}) {
     const apiKey = payload.apiKey || '';
     const model = payload.model || '';
     const provider = payload.provider || 'openai';
+    const endpoint = payload.endpoint || '';
 
     // Store config for the specified provider
     const providerConfig = llmProviders[provider];
@@ -2798,6 +2799,9 @@ function applyAiConfig(payload = {}) {
         }
         if (model) {
             localStorage.setItem(providerConfig.modelStorageKey, model);
+        }
+        if (endpoint && providerConfig.endpointStorageKey) {
+            localStorage.setItem(providerConfig.endpointStorageKey, endpoint);
         }
         localStorage.setItem('aiProvider', provider);
 
@@ -3239,6 +3243,8 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithAnthropic(apiKey, prompt);
         } else if (provider === 'openai') {
             responseText = await translateWithOpenAI(apiKey, prompt);
+        } else if (provider === 'azure') {
+            responseText = await translateWithAzure(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
         }
@@ -3635,6 +3641,8 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithAnthropic(apiKey, prompt);
         } else if (provider === 'openai') {
             responseText = await translateWithOpenAI(apiKey, prompt);
+        } else if (provider === 'azure') {
+            responseText = await translateWithAzure(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
         }
@@ -3765,6 +3773,42 @@ async function translateWithOpenAI(apiKey, prompt) {
     }
 
     const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+async function translateWithAzure(apiKey, prompt) {
+    const model = getSelectedModel('azure');
+    const endpoint = localStorage.getItem('azureEndpoint');
+    if (!endpoint) {
+        throw new Error('Azure endpoint not configured');
+    }
+    const baseUrl = endpoint.replace(/\/+$/, '');
+    const url = `${baseUrl}/openai/deployments/${model}/chat/completions?api-version=2024-08-01-preview`;
+    
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "api-key": apiKey
+        },
+        body: JSON.stringify({
+            max_completion_tokens: 16384,
+            messages: [{ role: "user", content: prompt }]
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('Azure OpenAI API Error:', { status, model, endpoint, error: errorBody });
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status} - ${errorBody.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Invalid Azure API response');
+    }
     return data.choices[0].message.content;
 }
 

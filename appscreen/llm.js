@@ -26,6 +26,19 @@ const llmProviders = {
         ],
         defaultModel: 'gpt-5-mini-2025-08-07'
     },
+    azure: {
+        name: 'Azure OpenAI',
+        keyPrefix: '',
+        storageKey: 'azureApiKey',
+        modelStorageKey: 'azureModel',
+        endpointStorageKey: 'azureEndpoint',
+        models: [
+            { id: 'gpt-5-nano', name: 'GPT-5 Nano ($)' },
+            { id: 'gpt-5-mini', name: 'GPT-5 Mini ($$)' }
+        ],
+        defaultModel: 'gpt-5-nano',
+        needsEndpoint: true
+    },
     google: {
         name: 'Google (Gemini)',
         keyPrefix: 'AIza',

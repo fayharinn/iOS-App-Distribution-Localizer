@@ -192,6 +192,51 @@ async function generateTitlesWithOpenAI(apiKey, images, prompt) {
     return data.choices[0].message.content;
 }
 
+async function generateTitlesWithAzure(apiKey, images, prompt) {
+    const model = getSelectedModel('azure');
+    const endpoint = localStorage.getItem('azureEndpoint');
+    if (!endpoint) {
+        throw new Error('Azure endpoint not configured');
+    }
+    const baseUrl = endpoint.replace(/\/+$/, '');
+    const url = `${baseUrl}/openai/deployments/${model}/chat/completions?api-version=2024-08-01-preview`;
+
+    const content = [];
+    for (const img of images) {
+        content.push({
+            type: "image_url",
+            image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+        });
+    }
+    content.push({ type: "text", text: prompt });
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "api-key": apiKey
+        },
+        body: JSON.stringify({
+            max_completion_tokens: 4096,
+            messages: [{ role: "user", content: content }]
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('Azure Vision API Error:', { status, model, endpoint, error: errorBody });
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status} - ${errorBody.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Invalid Azure API response');
+    }
+    return data.choices[0].message.content;
+}
+
 /**
  * Generate titles using Google Gemini vision API
  * @param {string} apiKey - Google API key
@@ -381,6 +426,8 @@ Write all titles in ${langName}.`;
             responseText = await generateTitlesWithAnthropic(apiKey, images, prompt);
         } else if (provider === 'openai') {
             responseText = await generateTitlesWithOpenAI(apiKey, images, prompt);
+        } else if (provider === 'azure') {
+            responseText = await generateTitlesWithAzure(apiKey, images, prompt);
         } else if (provider === 'google') {
             responseText = await generateTitlesWithGoogle(apiKey, images, prompt);
         } else {
