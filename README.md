@@ -188,6 +188,7 @@ Screenshot generator based on [appscreen](https://github.com/YUZU-Hub/appscreen)
 ## 👥 Contributors
 
 - [isnine](https://github.com/isnine) — Azure OpenAI support
+- [krrskl](https://github.com/krrskl) Github models support
 
 ---
 
