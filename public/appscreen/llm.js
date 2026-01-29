@@ -50,18 +50,44 @@ const llmProviders = {
             { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro ($$$)' }
         ],
         defaultModel: 'gemini-2.5-flash'
+    },
+    github: {
+        name: 'GitHub Models',
+        keyPrefix: 'ghp_',
+        storageKey: 'githubApiKey',
+        modelStorageKey: 'githubModel',
+        models: [
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini ($)' },
+            { id: 'gpt-4o', name: 'GPT-4o ($$)' },
+            { id: 'gpt-4.1', name: 'GPT-4.1 ($$$)' }
+        ],
+        defaultModel: 'gpt-4o'
     }
 };
 
 /**
  * Get the selected model for a provider
- * @param {string} provider - Provider key (anthropic, openai, google)
+ * @param {string} provider - Provider key (anthropic, openai, google, azure, github)
  * @returns {string} - Model ID
  */
 function getSelectedModel(provider) {
     const config = llmProviders[provider];
     if (!config) return null;
-    return localStorage.getItem(config.modelStorageKey) || config.defaultModel;
+    
+    const savedModel = localStorage.getItem(config.modelStorageKey);
+    
+    // Validate that the saved model exists in this provider's model list
+    if (savedModel) {
+        const isValidModel = config.models.some(m => m.id === savedModel);
+        if (isValidModel) {
+            return savedModel;
+        }
+        // If saved model is invalid for this provider, clear it and use default
+        console.warn(`Invalid model "${savedModel}" for provider "${provider}", using default`);
+        localStorage.removeItem(config.modelStorageKey);
+    }
+    
+    return config.defaultModel;
 }
 
 /**

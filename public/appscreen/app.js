@@ -3645,6 +3645,8 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithAzure(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
+        } else if (provider === 'github') {
+            responseText = await translateWithGitHub(apiKey, prompt);
         }
 
         updateStatus('Processing response...', 'Parsing translations');
@@ -3832,6 +3834,37 @@ async function translateWithGoogle(apiKey, prompt) {
 
     const data = await response.json();
     return data.candidates[0].content.parts[0].text;
+}
+
+async function translateWithGitHub(apiKey, prompt) {
+    const model = getSelectedModel('github');
+    const response = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 4096
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('GitHub Models API Error:', {
+            status,
+            model,
+            error: errorBody
+        });
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status} - ${errorBody.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
 }
 
 function setTranslateStatus(message, type) {

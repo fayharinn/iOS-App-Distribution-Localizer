@@ -284,6 +284,55 @@ async function generateTitlesWithGoogle(apiKey, images, prompt) {
 }
 
 /**
+ * Generate titles using GitHub Models API
+ * @param {string} apiKey - GitHub API token
+ * @param {Array} images - Array of { mimeType, base64 } objects
+ * @param {string} prompt - Text prompt
+ * @returns {Promise<string>} - Response text
+ */
+async function generateTitlesWithGitHub(apiKey, images, prompt) {
+    const model = getSelectedModel('github');
+
+    // Build content array with images and text
+    const content = [];
+
+    for (const img of images) {
+        content.push({
+            type: "image_url",
+            image_url: {
+                url: `data:${img.mimeType};base64,${img.base64}`
+            }
+        });
+    }
+
+    content.push({ type: "text", text: prompt });
+
+    const response = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: content }],
+            max_tokens: 4096
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('GitHub Models API Error:', { status, model, error: errorBody });
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status} - ${errorBody.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+/**
  * Show the magical titles confirmation dialog
  */
 function showMagicalTitlesDialog() {
@@ -430,6 +479,8 @@ Write all titles in ${langName}.`;
             responseText = await generateTitlesWithAzure(apiKey, images, prompt);
         } else if (provider === 'google') {
             responseText = await generateTitlesWithGoogle(apiKey, images, prompt);
+        } else if (provider === 'github') {
+            responseText = await generateTitlesWithGitHub(apiKey, images, prompt);
         } else {
             throw new Error(`Unknown provider: ${provider}`);
         }

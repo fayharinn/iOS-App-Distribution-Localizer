@@ -1075,6 +1075,10 @@
                         <input type="radio" name="ai-provider" value="google">
                         <span class="provider-label">Google (Gemini)</span>
                     </label>
+                    <label class="settings-provider-option">
+                        <input type="radio" name="ai-provider" value="github">
+                        <span class="provider-label">GitHub Models</span>
+                    </label>
                 </div>
             </div>
 
@@ -1168,6 +1172,37 @@
                         <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
                     </svg>
                     Get your API key from Google AI Studio
+                </a>
+            </div>
+
+            <div class="settings-section settings-api-section" id="settings-github" data-provider="github" style="display: none;">
+                <h4 class="settings-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                    GitHub API Token
+                </h4>
+                <div class="settings-input-group">
+                    <input type="password" id="settings-api-key-github" placeholder="ghp_..." />
+                    <button class="settings-show-key" data-target="settings-api-key-github" title="Show/hide key">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="settings-key-status" id="settings-key-status-github"></div>
+                <div class="settings-model-group">
+                    <label class="settings-model-label">Model</label>
+                    <select id="settings-model-github" class="settings-model-select">
+                        <!-- Populated dynamically from llm.js -->
+                    </select>
+                </div>
+                <a href="https://github.com/settings/tokens" target="_blank" class="settings-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+                    </svg>
+                    Get your token from GitHub Settings
                 </a>
             </div>
 
