@@ -947,6 +947,11 @@ Respond with ONLY the keywords, nothing else:`
         addLog(`Error translating ${targetLocale}: ${error.message}`, 'error')
         totalErrors++
       }
+
+      // Add a small delay between locales to avoid overwhelming the API
+      if (currentLocale < totalLocales) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
     }
 
     // Reload localizations
@@ -1203,7 +1208,7 @@ Respond with ONLY the keywords, nothing else:`
       return
     }
 
-    addLog(`Translating App Info to ${localestoTranslate.length} locale(s) in parallel...`, 'info')
+    addLog(`Translating App Info to ${localestoTranslate.length} locale(s)...`, 'info')
 
     const config = {
       provider: aiConfig.provider,
@@ -1215,64 +1220,58 @@ Respond with ONLY the keywords, nothing else:`
 
     const { translateText } = await import('@/services/translationService')
 
-    // Build all translation promises in parallel
-    const translationPromises = localestoTranslate
-      .filter(targetLoc => targetLoc.locale !== sourceLocale)
-      .map(async (targetLoc) => {
-        const localeInfo = ASC_LOCALES.find(l => l.code === targetLoc.locale)
-        const localeName = localeInfo?.name || targetLoc.locale
+    // Rate limiting delays per provider (in ms)
+    const providerDelays = {
+      github: 1500,
+      openai: 200,
+      azure: 200,
+      bedrock: 300,
+      anthropic: 200,
+    }
+    const requestDelay = providerDelays[config.provider] || 200
 
-        try {
-          const updates = {}
+    let successCount = 0
+    let errorCount = 0
 
-          // Translate name + subtitle in a single prompt for efficiency
-          if (sourceLoc.name || sourceLoc.subtitle) {
-            const prompt = `Translate to ${localeName}. Max 30 chars each. Keep short & catchy.${protectedWordsInstruction}
+    // Process sequentially to avoid rate limits
+    for (const targetLoc of localestoTranslate) {
+      if (targetLoc.locale === sourceLocale) continue
+
+      const localeInfo = ASC_LOCALES.find(l => l.code === targetLoc.locale)
+      const localeName = localeInfo?.name || targetLoc.locale
+
+      try {
+        const updates = {}
+
+        // Translate name + subtitle in a single prompt for efficiency
+        if (sourceLoc.name || sourceLoc.subtitle) {
+          const prompt = `Translate to ${localeName}. Max 30 chars each. Keep short & catchy.${protectedWordsInstruction}
 Return ONLY a JSON object like: {"name": "...", "subtitle": "..."}
 
 ${sourceLoc.name ? `Name: ${sourceLoc.name}` : ''}
 ${sourceLoc.subtitle ? `Subtitle: ${sourceLoc.subtitle}` : ''}`
 
-            const result = await translateText(prompt, sourceLocale, targetLoc.locale, config)
-            
-            // Parse JSON response
-            let parsed
-            try {
-              const jsonMatch = result.match(/\{[\s\S]*\}/)
-              parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
-            } catch {
-              parsed = {}
-            }
-
-            if (parsed.name && sourceLoc.name) {
-              updates.name = parsed.name.replace(/^["']|["']$/g, '').trim().substring(0, 30)
-            }
-            if (parsed.subtitle && sourceLoc.subtitle) {
-              updates.subtitle = parsed.subtitle.replace(/^["']|["']$/g, '').trim().substring(0, 30)
-            }
+          const result = await translateText(prompt, sourceLocale, targetLoc.locale, config)
+          
+          // Parse JSON response
+          let parsed
+          try {
+            const jsonMatch = result.match(/\{[\s\S]*\}/)
+            parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+          } catch {
+            parsed = {}
           }
 
-          return { targetLoc, updates, localeName, error: null }
-        } catch (error) {
-          return { targetLoc, updates: {}, localeName, error: error.message }
+          if (parsed.name && sourceLoc.name) {
+            updates.name = parsed.name.replace(/^["']|["']$/g, '').trim().substring(0, 30)
+          }
+          if (parsed.subtitle && sourceLoc.subtitle) {
+            updates.subtitle = parsed.subtitle.replace(/^["']|["']$/g, '').trim().substring(0, 30)
+          }
         }
-      })
 
-    // Execute all in parallel
-    const results = await Promise.all(translationPromises)
-
-    let successCount = 0
-    let errorCount = 0
-
-    for (const { targetLoc, updates, localeName, error } of results) {
-      if (error) {
-        addLog(`Error translating App Info for ${localeName}: ${error}`, 'error')
-        errorCount++
-        continue
-      }
-
-      if (Object.keys(updates).length > 0) {
-        setEditedAppInfo(prev => ({
+        if (Object.keys(updates).length > 0) {
+          setEditedAppInfo(prev => ({
           ...prev,
           [targetLoc.id]: {
             ...(prev[targetLoc.id] || {}),
@@ -1281,12 +1280,24 @@ ${sourceLoc.subtitle ? `Subtitle: ${sourceLoc.subtitle}` : ''}`
         }))
         addLog(`Translated App Info for ${localeName}`, 'success')
         successCount++
+      } else {
+        errorCount++
+      }
+
+      // Add delay between requests to prevent rate limiting
+      await new Promise(resolve => setTimeout(resolve, requestDelay))
+      } catch (error) {
+        addLog(`Error translating App Info for ${localeName}: ${error.message}`, 'error')
+        errorCount++
       }
     }
 
     setIsTranslatingAppInfo(null)
     if (successCount > 0) {
       addLog(`Done! ${successCount} locale(s) ready for review. Click "Save All Changes" to confirm.`, 'info')
+    }
+    if (errorCount > 0) {
+      addLog(`${errorCount} locale(s) failed to translate`, 'error')
     }
   }
 

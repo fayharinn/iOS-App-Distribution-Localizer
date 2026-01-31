@@ -500,6 +500,20 @@ export async function createAppInfoLocalization(credentials, appInfoId, locale, 
 }
 
 // Translate App Store content using AI
+// Rate limiting configuration per provider (in milliseconds)
+const PROVIDER_DELAYS = {
+  github: 1500,  // GitHub has stricter rate limits
+  openai: 200,
+  azure: 200,
+  bedrock: 300,
+  anthropic: 200,
+}
+
+// Helper function to add delay between requests
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export async function translateAppStoreContent(text, targetLocale, aiConfig, fieldType = 'description') {
   const { provider, apiKey, model, region } = aiConfig
 
@@ -614,6 +628,31 @@ RULES:
         throw new Error(`Invalid Bedrock API response: ${JSON.stringify(result).slice(0, 200)}`)
       }
       content = result.output.message.content[0].text.trim()
+    } else if (provider === 'github') {
+      console.log('[ASC Translation] Calling GitHub Models...')
+      const response = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userMessage }
+          ],
+          max_tokens: 4096
+        })
+      })
+
+      const result = await response.json()
+      console.log('[ASC Translation] GitHub Models response:', result.error ? result.error : 'OK')
+      if (result.error) throw new Error(result.error.message || JSON.stringify(result.error))
+      if (!result.choices?.[0]?.message?.content) {
+        throw new Error(`Invalid GitHub Models API response: ${JSON.stringify(result).slice(0, 200)}`)
+      }
+      content = result.choices[0].message.content.trim()
     } else {
       throw new Error(`Unknown provider: ${provider}`)
     }
@@ -724,17 +763,27 @@ export async function getScreenshotSets(credentials, localizationId) {
 // Map short locale codes to ASC locale codes
 const LOCALE_CODE_MAP = {
   'en': 'en-US',
+  'en-us': 'en-US',
+  'en-gb': 'en-GB',
+  'en-au': 'en-AU',
   'fr': 'fr-FR',
+  'fr-fr': 'fr-FR',
   'de': 'de-DE',
+  'de-de': 'de-DE',
   'es': 'es-ES',
+  'es-es': 'es-ES',
+  'es-mx': 'es-MX',
   'it': 'it',
   'pt': 'pt-BR',
+  'pt-br': 'pt-BR',
+  'pt-pt': 'pt-PT',
   'ja': 'ja',
   'ko': 'ko',
   'zh': 'zh-Hans',
   'zh-hans': 'zh-Hans',
   'zh-hant': 'zh-Hant',
   'ar': 'ar-SA',
+  'ar-sa': 'ar-SA',
   'tr': 'tr',
   'ru': 'ru',
   'th': 'th',
@@ -744,6 +793,7 @@ const LOCALE_CODE_MAP = {
   'pl': 'pl',
   'uk': 'uk',
   'nl': 'nl-NL',
+  'nl-nl': 'nl-NL',
   'sv': 'sv',
   'da': 'da',
   'fi': 'fi',
@@ -1004,6 +1054,10 @@ export async function translateAllFields(sourceLocalization, targetLocale, aiCon
     region: aiConfig.region
   })
 
+  // Get provider-specific delay
+  const requestDelay = PROVIDER_DELAYS[aiConfig.provider] || 200
+  console.log(`[ASC Translation] Using ${requestDelay}ms delay between requests for ${aiConfig.provider}`)
+
   for (const field of fieldsToTranslate) {
     const sourceText = sourceLocalization[field]
 
@@ -1022,33 +1076,62 @@ export async function translateAllFields(sourceLocalization, targetLocale, aiCon
 
     console.log(`[ASC Translation] Translating ${field} to ${targetLocale}...`)
 
-    const { translation, error } = await translateAppStoreContent(
-      sourceText,
-      targetLocale,
-      aiConfig,
-      field
-    )
+    // Retry logic with exponential backoff
+    let retries = 0
+    const maxRetries = 3
+    let success = false
 
-    if (error) {
-      console.error(`[ASC Translation] Error for ${field}:`, error)
-      onProgress?.({
-        current,
-        total,
-        field,
-        status: 'error',
-        error
-      })
-      errors.push({ field, error })
-      results[field] = sourceText // Keep original on error
-    } else {
-      console.log(`[ASC Translation] Success for ${field}:`, translation?.substring(0, 50) + '...')
-      results[field] = translation
-      onProgress?.({
-        current,
-        total,
-        field,
-        status: 'success'
-      })
+    while (retries <= maxRetries && !success) {
+      try {
+        const { translation, error } = await translateAppStoreContent(
+          sourceText,
+          targetLocale,
+          aiConfig,
+          field
+        )
+
+        if (error) {
+          throw new Error(error)
+        }
+
+        console.log(`[ASC Translation] Success for ${field}:`, translation?.substring(0, 50) + '...')
+        results[field] = translation
+        onProgress?.({
+          current,
+          total,
+          field,
+          status: 'success'
+        })
+        success = true
+      } catch (err) {
+        retries++
+        const isRateLimit = err.message?.toLowerCase().includes('rate limit') || 
+                           err.message?.toLowerCase().includes('too many requests') ||
+                           err.message?.toLowerCase().includes('429')
+
+        if (retries <= maxRetries && isRateLimit) {
+          const backoffDelay = requestDelay * Math.pow(2, retries)
+          console.warn(`[ASC Translation] Rate limit hit for ${field}, retry ${retries}/${maxRetries} after ${backoffDelay}ms`)
+          await delay(backoffDelay)
+        } else {
+          console.error(`[ASC Translation] Error for ${field}:`, err.message)
+          onProgress?.({
+            current,
+            total,
+            field,
+            status: 'error',
+            error: err.message
+          })
+          errors.push({ field, error: err.message })
+          results[field] = sourceText // Keep original on error
+          break
+        }
+      }
+    }
+
+    // Add delay between requests (except for last field)
+    if (current < total) {
+      await delay(requestDelay)
     }
   }
 
