@@ -47,7 +47,10 @@ export default {
           'Access-Control-Allow-Origin': corsOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'Access-Control-Allow-Credentials': 'true',
+          // NOTE: 'Access-Control-Allow-Credentials' is only needed if your frontend uses
+          // fetch() with { credentials: 'include' }. Currently not required for this app.
+          // Uncomment if you get CORS errors when saving to App Store Connect:
+          // 'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Max-Age': '86400',
         }
       })
@@ -62,7 +65,7 @@ export default {
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': corsOrigin,
-          'Access-Control-Allow-Credentials': 'true',
+          // 'Access-Control-Allow-Credentials': 'true',
         }
       })
     }
@@ -88,7 +91,7 @@ export default {
         headers: {
           'Content-Type': response.headers.get('Content-Type') || 'application/json',
           'Access-Control-Allow-Origin': corsOrigin,
-          'Access-Control-Allow-Credentials': 'true',
+          // 'Access-Control-Allow-Credentials': 'true',
         },
       })
     } catch (error) {
@@ -97,7 +100,7 @@ export default {
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': corsOrigin,
-          'Access-Control-Allow-Credentials': 'true',
+          // 'Access-Control-Allow-Credentials': 'true',
         }
       })
     }

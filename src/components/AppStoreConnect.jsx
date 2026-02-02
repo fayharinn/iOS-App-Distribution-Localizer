@@ -1029,20 +1029,29 @@ Respond with ONLY the keywords, nothing else:`
 
     try {
       if (editDialog.type === 'version') {
-        await updateVersionLocalization(credentials, editDialog.localization.id, {
+        const updates = {
           description: editDialog.localization.description,
           keywords: editDialog.localization.keywords,
           promotionalText: editDialog.localization.promotionalText,
           whatsNew: editDialog.localization.whatsNew,
-          supportUrl: editDialog.localization.supportUrl,
-          marketingUrl: editDialog.localization.marketingUrl,
-        })
+        }
+        // Only include URLs if they have a value (Apple rejects empty strings)
+        if (editDialog.localization.supportUrl) {
+          updates.supportUrl = editDialog.localization.supportUrl
+        }
+        if (editDialog.localization.marketingUrl) {
+          updates.marketingUrl = editDialog.localization.marketingUrl
+        }
+        await updateVersionLocalization(credentials, editDialog.localization.id, updates)
       } else {
-        await updateAppInfoLocalization(credentials, editDialog.localization.id, {
+        const updates = {
           name: editDialog.localization.name,
           subtitle: editDialog.localization.subtitle,
-          privacyPolicyUrl: editDialog.localization.privacyPolicyUrl,
-        })
+        }
+        if (editDialog.localization.privacyPolicyUrl) {
+          updates.privacyPolicyUrl = editDialog.localization.privacyPolicyUrl
+        }
+        await updateAppInfoLocalization(credentials, editDialog.localization.id, updates)
       }
 
       addLog(`Saved ${editDialog.locale} localization`, 'success')
@@ -1272,20 +1281,20 @@ ${sourceLoc.subtitle ? `Subtitle: ${sourceLoc.subtitle}` : ''}`
 
         if (Object.keys(updates).length > 0) {
           setEditedAppInfo(prev => ({
-          ...prev,
-          [targetLoc.id]: {
-            ...(prev[targetLoc.id] || {}),
-            ...updates
-          }
-        }))
-        addLog(`Translated App Info for ${localeName}`, 'success')
-        successCount++
-      } else {
-        errorCount++
-      }
+            ...prev,
+            [targetLoc.id]: {
+              ...(prev[targetLoc.id] || {}),
+              ...updates
+            }
+          }))
+          addLog(`Translated App Info for ${localeName}`, 'success')
+          successCount++
+        } else {
+          errorCount++
+        }
 
-      // Add delay between requests to prevent rate limiting
-      await new Promise(resolve => setTimeout(resolve, requestDelay))
+        // Add delay between requests to prevent rate limiting
+        await new Promise(resolve => setTimeout(resolve, requestDelay))
       } catch (error) {
         addLog(`Error translating App Info for ${localeName}: ${error.message}`, 'error')
         errorCount++
