@@ -85,7 +85,7 @@ Your credentials never leave your browser:
 - Open source — audit the code yourself
 
 <details>
-<summary>View authentication flow diagram</summary>
+<summary>View App Store Connect authentication flow</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -118,6 +118,76 @@ Your credentials never leave your browser:
 │  │  App Store   │                                                           │
 │  │ Connect API  │                                                           │
 │  └──────────────┘                                                           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
+
+<details>
+<summary>View Google Play Console authentication flow</summary>
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Google Play Console Auth Flow                          │
+│                     (OAuth2 JWT Bearer for Service Accounts)                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌────────────────┐                                                         │
+│  │ Service Account│ ◄─── JSON file from Google Cloud Console                │
+│  │   JSON File    │      Contains: client_email, private_key                │
+│  └───────┬────────┘                                                         │
+│          │                                                                  │
+│          │ parse & extract                                                  │
+│          ▼                                                                  │
+│  ┌────────────────┐                                                         │
+│  │  Private Key   │ ◄─── RSA private key (RS256)                            │
+│  │  + Client Email│      In memory only (not persisted)                     │
+│  └───────┬────────┘                                                         │
+│          │                                                                  │
+│          │ sign JWT claim                                                   │
+│          ▼                                                                  │
+│  ┌────────────────┐      JWT Payload:                                       │
+│  │   Signed JWT   │      • iss: client_email                                │
+│  │   Assertion    │      • scope: androidpublisher                          │
+│  └───────┬────────┘      • aud: oauth2.googleapis.com/token                 │
+│          │               • iat/exp: timestamps                              │
+│          │                                                                  │
+│          │ POST to Google OAuth2                                            │
+│          ▼                                                                  │
+│  ┌────────────────┐                                                         │
+│  │    Google      │                                                         │
+│  │  OAuth2 Token  │ ◄─── https://oauth2.googleapis.com/token                │
+│  │    Endpoint    │      grant_type: jwt-bearer                             │
+│  └───────┬────────┘                                                         │
+│          │                                                                  │
+│          │ returns access_token                                             │
+│          ▼                                                                  │
+│  ┌────────────────┐                                                         │
+│  │ sessionStorage │ ◄─── Access token cached for ~1 hour                    │
+│  │ (token + expiry)│     Auto-refresh when expired                          │
+│  └───────┬────────┘      Timer shows remaining time                         │
+│          │                                                                  │
+│          │ Bearer token                                                     │
+│          ▼                                                                  │
+│  ┌────────────────┐                                                         │
+│  │  Google Play   │                                                         │
+│  │  Developer API │ ◄─── androidpublisher/v3/applications/{packageName}     │
+│  └────────────────┘                                                         │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Edit Session Workflow:                                              │    │
+│  │                                                                     │    │
+│  │   Create Edit ──► Make Changes ──► Commit Edit                      │    │
+│  │       │              │                  │                           │    │
+│  │       │              │                  └──► Changes go live        │    │
+│  │       │              │                                              │    │
+│  │       │              └──► Update listings, upload images            │    │
+│  │       │                                                             │    │
+│  │       └──► Returns editId (required for all operations)             │    │
+│  │                                                                     │    │
+│  │   Note: Uncommitted edits expire automatically                      │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

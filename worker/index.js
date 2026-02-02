@@ -79,14 +79,21 @@ export default {
     }
 
     try {
+      const contentType = request.headers.get('Content-Type')
+      const headers = {
+        'Authorization': request.headers.get('Authorization'),
+      }
+      
+      // Preserve original Content-Type for image uploads etc.
+      if (contentType) {
+        headers['Content-Type'] = contentType
+      }
+
       const response = await fetch(targetUrl, {
         method: request.method,
-        headers: {
-          'Authorization': request.headers.get('Authorization'),
-          'Content-Type': request.headers.get('Content-Type') || 'application/json',
-        },
+        headers,
         body: request.method !== 'GET' && request.method !== 'HEAD'
-          ? await request.text()
+          ? await request.arrayBuffer()
           : undefined,
       })
 
