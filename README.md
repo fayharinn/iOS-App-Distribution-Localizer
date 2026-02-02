@@ -137,11 +137,12 @@ Your credentials never leave your browser:
 
 ### Google Play Console API
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a service account with Google Play Developer API access
+2. Create a service account in your project, with Google Play Developer API enabled
 3. Download the JSON key file
-4. In Play Console → Settings → API access, link the service account
-5. Grant "Admin" or "Release manager" permission for your app
-6. Upload the JSON key in the app sidebar
+4. In Play Console → Users and permissions → Invite new users
+5. Add the service account email (from the JSON file)
+6. Grant "Admin" or "Release manager" permission for your app
+7. Upload the JSON key in the app sidebar
 
 ### AI Translation
 Configure in the sidebar:
