@@ -43,6 +43,7 @@ export const PROVIDERS = {
       'arn:aws:bedrock:us-east-1:471112516430:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0',
       'arn:aws:bedrock:us-east-1:471112516430:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0',
       'arn:aws:bedrock:us-east-1:471112516430:inference-profile/global.anthropic.claude-opus-4-5-20251101-v1:0',
+      'arn:aws:bedrock:us-east-1:471112516430:inference-profile/global.anthropic.claude-opus-4-6-v1',
     ],
     defaultModel: 'arn:aws:bedrock:us-east-1:471112516430:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0',
     needsRegion: true,
