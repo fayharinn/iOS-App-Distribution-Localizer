@@ -189,7 +189,10 @@ const languageFlags = {
     'it': '🇮🇹', 'pt': '🇵🇹', 'pt-br': '🇧🇷', 'nl': '🇳🇱', 'ru': '🇷🇺',
     'ja': '🇯🇵', 'ko': '🇰🇷', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'ar': '🇸🇦',
     'hi': '🇮🇳', 'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'da': '🇩🇰',
-    'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩'
+    'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩',
+    'uk': '🇺🇦', 'ms': '🇲🇾', 'fil': '🇵🇭', 'ro': '🇷🇴', 'el': '🇬🇷',
+    'cs': '🇨🇿', 'hu': '🇭🇺', 'he': '🇮🇱', 'sk': '🇸🇰', 'bg': '🇧🇬',
+    'hr': '🇭🇷', 'ca': '🏴'
 };
 
 // Google Fonts configuration
@@ -3022,7 +3025,10 @@ const languageNames = {
     'zh': 'Chinese (Simplified)', 'zh-tw': 'Chinese (Traditional)', 'ar': 'Arabic',
     'hi': 'Hindi', 'tr': 'Turkish', 'pl': 'Polish', 'sv': 'Swedish',
     'da': 'Danish', 'no': 'Norwegian', 'fi': 'Finnish', 'th': 'Thai',
-    'vi': 'Vietnamese', 'id': 'Indonesian'
+    'vi': 'Vietnamese', 'id': 'Indonesian', 'uk': 'Ukrainian', 'ms': 'Malay',
+    'fil': 'Filipino', 'ro': 'Romanian', 'el': 'Greek', 'cs': 'Czech',
+    'hu': 'Hungarian', 'he': 'Hebrew', 'sk': 'Slovak', 'bg': 'Bulgarian',
+    'hr': 'Croatian', 'ca': 'Catalan'
 };
 
 function openTranslateModal(target) {
