@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "deploy": "npm run build && npx gh-pages -d dist",
+    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name xcstrings-localizer --branch production",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
